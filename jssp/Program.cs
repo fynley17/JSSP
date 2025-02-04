@@ -1,10 +1,13 @@
-﻿namespace jssp
+﻿using System.IO;
+
+namespace jssp
 {
     internal class Program
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello, World!");
+            string base_directory = AppDomain.CurrentDomain.BaseDirectory;
+            string realative_path = '@'
         }
     }
 }
