@@ -7,4 +7,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Include="bin\Debug\net8.0\CSVs\jobs_huge.csv" />
+    <None Include="bin\Debug\net8.0\CSVs\jobs_large.csv" />
+    <None Include="bin\Debug\net8.0\CSVs\jobs_mid.csv" />
+    <None Include="bin\Debug\net8.0\CSVs\jobs_pleaseStop.csv" />
+    <None Include="bin\Debug\net8.0\CSVs\jobs_small.csv" />
+  </ItemGroup>
+
 </Project>
