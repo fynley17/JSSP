@@ -83,8 +83,14 @@ namespace jssp
                         {
                             if (operation.Subdivision == subdivision)
                             {
-                                writer.Write($",job{job.Key}- op{operation.OperationId}");
+                                writer.Write($",job{job.Key}-op{operation.OperationId}");
                                 currentTime += operation.ProcessingTime * 60; // Increment time by processing time in minutes
+
+                                // Reset time to 9 AM if it reaches 5 PM
+                                if (currentTime >= 17 * 60)
+                                {
+                                    currentTime = 9 * 60;
+                                }
                             }
                             else
                             {
