@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace jssp
 {
@@ -51,6 +52,59 @@ namespace jssp
         public string Subdivision { get; set; }
         public int ProcessingTime { get; set; }
     }
+
+    public class CsvConverter
+    {
+        public void ConvertToCsv(Dictionary<int, List<JobOperation>> jobs, string outputFilePath)
+        {
+            var subdivisions = jobs.SelectMany(j => j.Value.Select(o => o.Subdivision)).Distinct().ToList();
+            subdivisions.Sort();
+
+            using (var writer = new StreamWriter(outputFilePath))
+            {
+                // Write the header
+                writer.Write("Time");
+                foreach (var subdivision in subdivisions)
+                {
+                    writer.Write($",{subdivision}");
+                }
+                writer.WriteLine();
+
+                // Write the job operations
+                int currentTime = 9 * 60; // Start at 9 AM in minutes
+
+                foreach (var job in jobs)
+                {
+                    foreach (var operation in job.Value)
+                    {
+                        writer.Write($"{FormatTime(currentTime)}");
+
+                        foreach (var subdivision in subdivisions)
+                        {
+                            if (operation.Subdivision == subdivision)
+                            {
+                                writer.Write($",job{job.Key}- op{operation.OperationId}");
+                                currentTime += operation.ProcessingTime * 60; // Increment time by processing time in minutes
+                            }
+                            else
+                            {
+                                writer.Write(",");
+                            }
+                        }
+                        writer.WriteLine();
+                    }
+                }
+            }
+        }
+
+        private string FormatTime(int minutes)
+        {
+            int hours = minutes / 60;
+            int mins = minutes % 60;
+            return $"{hours:D2}:{mins:D2}";
+        }
+    }
+
     class Files
     {
         public static void directoryExists(string directory_path)
@@ -113,15 +167,12 @@ namespace jssp
             var jobProcessor = new JobProcessor();
             var jobs = jobProcessor.ProcessCsv(schedule);
 
-            // Display the jobs and their operations
-            foreach (var job in jobs)
-            {
-                Console.WriteLine($"JobId: {job.Key}");
-                foreach (var operation in job.Value)
-                {
-                    Console.WriteLine($"  OperationId: {operation.OperationId}, Subdivision: {operation.Subdivision}, ProcessingTime: {operation.ProcessingTime}");
-                }
-            }
+            // Convert the processed jobs to a new CSV file
+            var csvConverter = new CsvConverter();
+            string outputFilePath = Path.Combine(directory_path, "output.csv");
+            csvConverter.ConvertToCsv(jobs, outputFilePath);
+
+            Console.WriteLine("CSV file has been created at: " + outputFilePath);
         }
     }
 }
