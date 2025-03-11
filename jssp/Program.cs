@@ -1,9 +1,20 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection.Metadata.Ecma335;
+using System.Runtime.CompilerServices;
 
 namespace jssp
 {
+    public class JobShop 
+    {
+        private  Random rand = new();
+        public static bool EO()
+        {
+
+            return false;
+        }
+    }
     public class JobProcessor
     {
         public Dictionary<int, List<JobOperation>> ProcessCsv(string filePath)
@@ -72,6 +83,13 @@ namespace jssp
         }
     }
 
+    public class GA 
+    {
+        private int populationSize;
+        private double mutationRate;
+        private int maxGenerations;
+    }
+
     internal class Program
     {
         static void Main(string[] args)
@@ -122,6 +140,8 @@ namespace jssp
                     Console.WriteLine($"  OperationId: {operation.OperationId}, Subdivision: {operation.Subdivision}, ProcessingTime: {operation.ProcessingTime}");
                 }
             }
+
+            JobShop.randomSchedual(jobs);
         }
     }
 }
