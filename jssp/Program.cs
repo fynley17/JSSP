@@ -9,7 +9,7 @@ namespace jssp
     public class JobShop 
     {
         private  Random rand = new();
-        public static bool EO()
+        public static bool EnsureOrder()
         {
 
             return false;
@@ -140,8 +140,6 @@ namespace jssp
                     Console.WriteLine($"  OperationId: {operation.OperationId}, Subdivision: {operation.Subdivision}, ProcessingTime: {operation.ProcessingTime}");
                 }
             }
-
-            JobShop.randomSchedual(jobs);
         }
     }
 }
