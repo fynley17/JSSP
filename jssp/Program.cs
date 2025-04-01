@@ -9,36 +9,56 @@ namespace jssp
     public class JobShop
     {
         private Random rand = new();
-        public static bool EnsureOrder()
-        {
-            // Ensure the order of the operations
-
-
-            return false;
-        }
 
         public List<JobOperation> GenerateRandomSchedule(List<List<JobOperation>> jobs)
         {
             var schedule = new List<JobOperation>();
-            var subdivisionEndTimes = new Dictionary<int, int>();
+            var allOperations = jobs.SelectMany(job => job).ToList();
 
-            // Schedule operations sequentially within each job
-            foreach (var job in jobs)
+            while (allOperations.Count > 0)
             {
-                int currentTime = 0;
-                foreach (var operation in job)
-                {
-                    int subdivisionId = operation.SubdivisionId;
-                    int startTime = Math.Max(currentTime, subdivisionEndTimes.ContainsKey(subdivisionId) ? subdivisionEndTimes[subdivisionId] : 0);
-                    operation.StartTime = startTime;
-                    operation.EndTime = startTime + operation.ProcessingTime;
-                    subdivisionEndTimes[subdivisionId] = operation.EndTime;
-                    currentTime = operation.EndTime;
-                    schedule.Add(operation);
-                }
+                var operation = allOperations[rand.Next(allOperations.Count)];
+                allOperations.Remove(operation);
+                schedule.Add(operation);
             }
 
             return schedule;
+        }
+
+        public bool EnsureOrder(List<JobOperation> schedule)
+        {
+            var subdivisionEndTimes = new Dictionary<int, int>();
+
+            foreach (var operation in schedule)
+            {
+                int subdivisionId = operation.SubdivisionId;
+                int startTime = operation.StartTime;
+
+                if (subdivisionEndTimes.ContainsKey(subdivisionId))
+                {
+                    if (startTime < subdivisionEndTimes[subdivisionId])
+                    {
+                        return false; // Subdivision is used in parallel
+                    }
+                }
+
+                subdivisionEndTimes[subdivisionId] = operation.EndTime;
+            }
+
+            var jobs = schedule.GroupBy(op => op.JobId);
+            foreach (var job in jobs)
+            {
+                var operations = job.OrderBy(op => op.OperationId).ToList();
+                for (int i = 1; i < operations.Count; i++)
+                {
+                    if (operations[i].StartTime < operations[i - 1].EndTime)
+                    {
+                        return false; // Operations within a job are not in the correct order
+                    }
+                }
+            }
+
+            return true;
         }
     }
     public class JobProcessor
@@ -146,26 +166,25 @@ namespace jssp
             // Initialize population
             var population = InitialisePopulation(jobs);
 
+            // Evaluate fitness of initial population
+            var fitnessScores = new List<double>();
+
+            // Genetic Algorithm main loop (simplified)
             for (int generation = 0; generation < maxGenerations; generation++)
             {
-                // Evaluate fitness
-                var fitnessScores = EvaluateFitness(population);
+                // Selection, Crossover, and Mutation steps would go here
 
-                // Selection
-                var matingPool = Selection(population, fitnessScores);
-
-                // Crossover
-                var newPopulation = Crossover(matingPool);
-
-                // Mutation
-                Mutate(newPopulation);
-
-                // Replacement
-                population = newPopulation;
+                // Evaluate fitness of new population
+                fitnessScores.Clear();
+                foreach (var schedule in population)
+                {
+                    fitnessScores.Add(FitnessFunction(schedule));
+                }
             }
 
             // Return the best schedule
-            return GetBestSchedule(population);
+            int bestIndex = fitnessScores.IndexOf(fitnessScores.Min());
+            return population[bestIndex];
         }
 
         private List<List<JobOperation>> InitialisePopulation(List<List<JobOperation>> jobs)
@@ -183,126 +202,24 @@ namespace jssp
             return population;
         }
 
-        private List<double> EvaluateFitness(List<List<JobOperation>> population)
+        public int CalculateMakespan(List<JobOperation> schedule)
         {
-            // Evaluate the fitness of each schedule in the population
-            var fitnessScores = new List<double>();
-
-            foreach (var schedule in population)
+            int makespan = 0;
+            foreach (var operation in schedule)
             {
-                // Calculate fitness score for the schedule
-                double fitness = CalculateFitness(schedule);
-                fitnessScores.Add(fitness);
+                if (operation.EndTime > makespan)
+                {
+                    makespan = operation.EndTime;
+                }
             }
-
-            return fitnessScores;
+            return makespan;
         }
 
-        private double CalculateFitness(List<JobOperation> schedule)
+        public double FitnessFunction(List<JobOperation> schedule)
         {
-            // Calculate the makespan (total time required to complete all jobs)
-            int makespan = schedule.Max(operation => operation.EndTime);
-
-            // In this example, a lower makespan is better
+            int makespan = CalculateMakespan(schedule);
+            // The fitness value is the inverse of the makespan to ensure that shorter makespans are better
             return 1.0 / makespan;
-        }
-
-        private List<List<JobOperation>> Selection(List<List<JobOperation>> population, List<double> fitnessScores)
-        {
-            var matingPool = new List<List<JobOperation>>();
-            double totalFitness = fitnessScores.Sum();
-
-            for (int i = 0; i < populationSize; i++)
-            {
-                double randomValue = rand.NextDouble() * totalFitness;
-                double cumulativeFitness = 0.0;
-
-                for (int j = 0; j < population.Count; j++)
-                {
-                    cumulativeFitness += fitnessScores[j];
-                    if (cumulativeFitness >= randomValue)
-                    {
-                        matingPool.Add(population[j]);
-                        break;
-                    }
-                }
-            }
-
-            return matingPool;
-        }
-
-        private List<List<JobOperation>> Crossover(List<List<JobOperation>> matingPool)
-        {
-            var newPopulation = new List<List<JobOperation>>();
-
-            for (int i = 0; i < populationSize; i += 2)
-            {
-                // Select two parents
-                var parent1 = matingPool[rand.Next(matingPool.Count)];
-                var parent2 = matingPool[rand.Next(matingPool.Count)];
-
-                // Perform one-point crossover
-                int crossoverPoint = rand.Next(parent1.Count);
-
-                var offspring1 = new List<JobOperation>();
-                var offspring2 = new List<JobOperation>();
-
-                for (int j = 0; j < crossoverPoint; j++)
-                {
-                    offspring1.Add(parent1[j]);
-                    offspring2.Add(parent2[j]);
-                }
-
-                for (int j = crossoverPoint; j < parent1.Count; j++)
-                {
-                    offspring1.Add(parent2[j]);
-                    offspring2.Add(parent1[j]);
-                }
-
-                newPopulation.Add(offspring1);
-                newPopulation.Add(offspring2);
-            }
-
-            return newPopulation;
-        }
-
-        private void Mutate(List<List<JobOperation>> population)
-        {
-            foreach (var schedule in population)
-            {
-                if (rand.NextDouble() < mutationRate)
-                {
-                    // Perform mutation by swapping two random operations in the schedule
-                    int index1 = rand.Next(schedule.Count);
-                    int index2 = rand.Next(schedule.Count);
-
-                    var temp = schedule[index1];
-                    schedule[index1] = schedule[index2];
-                    schedule[index2] = temp;
-                }
-            }
-        }
-
-        private List<JobOperation> GetBestSchedule(List<List<JobOperation>> population)
-        {
-            // Evaluate fitness scores
-            var fitnessScores = EvaluateFitness(population);
-
-            // Find the index of the best schedule
-            int bestIndex = 0;
-            double bestFitness = fitnessScores[0];
-
-            for (int i = 1; i < fitnessScores.Count; i++)
-            {
-                if (fitnessScores[i] > bestFitness)
-                {
-                    bestFitness = fitnessScores[i];
-                    bestIndex = i;
-                }
-            }
-
-            // Return the best schedule
-            return population[bestIndex];
         }
     }
 
@@ -365,7 +282,7 @@ namespace jssp
             var ga = new GA(populationSize: 100, mutationRate: 0.01, maxGenerations: 100);
             var bestSchedule = ga.Run(jobs);
 
-            string filePath = Path.Combine(base_directory, "output1.csv");
+            string filePath = Path.Combine(base_directory, "output.csv");
             // Output the best schedule as a table
             SchedulePrinter.PrintScheduleAsCsv(bestSchedule, filePath);
         }
