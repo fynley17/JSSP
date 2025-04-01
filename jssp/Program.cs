@@ -6,20 +6,24 @@ using System.Runtime.CompilerServices;
 
 namespace jssp
 {
-    public class JobShop 
+    public class JobShop
     {
-        private  Random rand = new();
+        private Random rand = new();
         public static bool EnsureOrder()
         {
+            // Ensure the order of the operations
+
 
             return false;
         }
     }
     public class JobProcessor
     {
-        public Dictionary<int, List<JobOperation>> ProcessCsv(string filePath)
+        public List<List<JobOperation>> ProcessCsv(string filePath)
         {
-            var jobs = new Dictionary<int, List<JobOperation>>();
+            var jobs = new List<List<JobOperation>>();
+            var subdivisionIds = new Dictionary<string, int>();
+            int nextSubdivisionId = 1;
 
             using (var reader = new StreamReader(filePath))
             {
@@ -36,16 +40,25 @@ namespace jssp
                     string subdivision = values[2];
                     int processingTime = int.Parse(values[3]);
 
+                    // Assign a unique ID to the subdivision if it doesn't already have one
+                    if (!subdivisionIds.ContainsKey(subdivision))
+                    {
+                        subdivisionIds[subdivision] = nextSubdivisionId++;
+                    }
+                    int subdivisionId = subdivisionIds[subdivision];
+
                     var jobOperation = new JobOperation
                     {
                         OperationId = operationId,
                         Subdivision = subdivision,
+                        SubdivisionId = subdivisionId,
                         ProcessingTime = processingTime
                     };
 
-                    if (!jobs.ContainsKey(jobId))
+                    // Ensure the list is large enough to hold the jobId index
+                    while (jobs.Count <= jobId)
                     {
-                        jobs[jobId] = new List<JobOperation>();
+                        jobs.Add(new List<JobOperation>());
                     }
 
                     jobs[jobId].Add(jobOperation);
@@ -60,8 +73,10 @@ namespace jssp
     {
         public int OperationId { get; set; }
         public string Subdivision { get; set; }
+        public int SubdivisionId { get; set; }
         public int ProcessingTime { get; set; }
     }
+
     class Files
     {
         public static void directoryExists(string directory_path)
@@ -83,11 +98,82 @@ namespace jssp
         }
     }
 
-    public class GA 
+    public class GA
     {
         private int populationSize;
         private double mutationRate;
         private int maxGenerations;
+        private Random rand = new();
+
+        public GA(int populationSize, double mutationRate, int maxGenerations)
+        {
+            this.populationSize = populationSize;
+            this.mutationRate = mutationRate;
+            this.maxGenerations = maxGenerations;
+        }
+
+        public List<JobOperation> Run(List<List<JobOperation>> jobs)
+        {
+            // Initialize population
+            var population = InitializePopulation(jobs);
+
+            for (int generation = 0; generation < maxGenerations; generation++)
+            {
+                // Evaluate fitness
+                var fitnessScores = EvaluateFitness(population);
+
+                // Selection
+                var matingPool = Selection(population, fitnessScores);
+
+                // Crossover
+                var newPopulation = Crossover(matingPool);
+
+                // Mutation
+                Mutate(newPopulation);
+
+                // Replacement
+                population = newPopulation;
+            }
+
+            // Return the best schedule
+            return GetBestSchedule(population);
+        }
+
+        private List<List<JobOperation>> InitializePopulation(List<List<JobOperation>> jobs)
+        {
+            // Initialize the population with random schedules
+            // ...
+        }
+
+        private List<double> EvaluateFitness(List<List<JobOperation>> population)
+        {
+            // Evaluate the fitness of each schedule in the population
+            // ...
+        }
+
+        private List<List<JobOperation>> Selection(List<List<JobOperation>> population, List<double> fitnessScores)
+        {
+            // Select schedules based on their fitness scores
+            // ...
+        }
+
+        private List<List<JobOperation>> Crossover(List<List<JobOperation>> matingPool)
+        {
+            // Perform crossover to create new schedules
+            // ...
+        }
+
+        private void Mutate(List<List<JobOperation>> population)
+        {
+            // Perform mutation on the population
+            // ...
+        }
+
+        private List<JobOperation> GetBestSchedule(List<List<JobOperation>> population)
+        {
+            // Return the best schedule from the population
+            // ...
+        }
     }
 
     internal class Program
@@ -132,12 +218,16 @@ namespace jssp
             var jobs = jobProcessor.ProcessCsv(schedule);
 
             // Display the jobs and their operations
-            foreach (var job in jobs)
+            for (int jobId = 0; jobId < jobs.Count; jobId++)
             {
-                Console.WriteLine($"JobId: {job.Key}");
-                foreach (var operation in job.Value)
+                var jobOperations = jobs[jobId];
+                if (jobOperations.Count > 0)
                 {
-                    Console.WriteLine($"  OperationId: {operation.OperationId}, Subdivision: {operation.Subdivision}, ProcessingTime: {operation.ProcessingTime}");
+                    Console.WriteLine($"JobId: {jobId}");
+                    foreach (var operation in jobOperations)
+                    {
+                        Console.WriteLine($"  OperationId: {operation.OperationId}, Subdivision: {operation.Subdivision}, SubdivisionId: {operation.SubdivisionId}, ProcessingTime: {operation.ProcessingTime}");
+                    }
                 }
             }
         }
