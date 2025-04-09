@@ -13,7 +13,7 @@ namespace jssp
             var schedule = new List<JobOperation>();
             var jobOperationIndices = new Dictionary<int, int>(); // Tracks the next operation index for each job
             var machineAvailability = new Dictionary<int, int>(); // Tracks the next available time for each machine
-            var rand = new Random();
+            var rand = new Random(Guid.NewGuid().GetHashCode()); // Use a unique seed for randomness
 
             // Initialize job operation indices
             for (int i = 0; i < jobs.Count; i++)
@@ -25,18 +25,34 @@ namespace jssp
             while (schedule.Count < jobs.Sum(job => job.Count))
             {
                 // Select a random job that still has unscheduled operations
-                var availableJobs = jobOperationIndices.Where(kvp => kvp.Value < jobs[kvp.Key].Count).Select(kvp => kvp.Key).ToList();
-                int randomJobIndex = availableJobs[rand.Next(availableJobs.Count)];
+                var availableJobs = jobOperationIndices
+                    .Where(kvp => kvp.Value < jobs[kvp.Key].Count)
+                    .Select(kvp => kvp.Key)
+                    .OrderBy(_ => rand.Next()) // Shuffle the available jobs to introduce randomness
+                    .ToList();
+
+                if (availableJobs.Count == 0)
+                {
+                    throw new InvalidOperationException("No available jobs to schedule. Check job data integrity.");
+                }
+
+                // Randomly select a job from the shuffled available jobs
+                int randomJobIndex = availableJobs.First();
                 var operation = jobs[randomJobIndex][jobOperationIndices[randomJobIndex]];
 
                 // Determine the earliest start time for the operation
                 int previousOperationEndTime = 0;
                 if (jobOperationIndices[randomJobIndex] > 0)
                 {
-                    previousOperationEndTime = schedule.First(op => op.JobId == randomJobIndex && op.OperationId == operation.OperationId - 1).EndTime;
+                    previousOperationEndTime = schedule
+                        .First(op => op.JobId == randomJobIndex && op.OperationId == operation.OperationId - 1)
+                        .EndTime;
                 }
 
-                int machineAvailableTime = machineAvailability.ContainsKey(operation.SubdivisionId) ? machineAvailability[operation.SubdivisionId] : 0;
+                int machineAvailableTime = machineAvailability.ContainsKey(operation.SubdivisionId)
+                    ? machineAvailability[operation.SubdivisionId]
+                    : 0;
+
                 operation.StartTime = Math.Max(previousOperationEndTime, machineAvailableTime);
                 operation.EndTime = operation.StartTime + operation.ProcessingTime;
 
@@ -46,6 +62,13 @@ namespace jssp
 
                 // Add the operation to the schedule
                 schedule.Add(operation);
+            }
+
+            // Verify that all operations are included
+            int totalOperations = jobs.Sum(job => job.Count);
+            if (schedule.Count != totalOperations)
+            {
+                throw new InvalidOperationException($"Schedule generation failed. Expected {totalOperations} operations, but got {schedule.Count}.");
             }
 
             return schedule;
@@ -158,23 +181,37 @@ namespace jssp
             var population = InitialisePopulation(jobs);
 
             // Evaluate fitness of initial population
-            var fitnessScores = new List<double>();
+            var makespan = new List<double>();
+            foreach (var schedule in population)
+            {
+                makespan.Add(FitnessFunction(schedule));
+            }
 
-            // Genetic Algorithm main loop (simplified)
+            // Genetic Algorithm main loop
             for (int generation = 0; generation < maxGenerations; generation++)
             {
-                // Selection, Crossover, and Mutation steps would go here
+                // Selection: Select parents based on fitness (lower makespan is better)
+                var selectedParents = SelectParents(population, makespan);
+
+                // Crossover: Create offspring by combining parents
+                var offspring = Crossover(selectedParents);
+
+                // Mutation: Introduce random changes to offspring
+                Mutate(offspring);
 
                 // Evaluate fitness of new population
-                fitnessScores.Clear();
+                population = offspring;
+                makespan.Clear();
                 foreach (var schedule in population)
                 {
-                    fitnessScores.Add(FitnessFunction(schedule));
+                    makespan.Add(FitnessFunction(schedule));
                 }
+
+                Console.WriteLine($"Generation {generation + 1}: Best Makespan = {makespan.Min()}");
             }
 
             // Return the best schedule
-            int bestIndex = fitnessScores.IndexOf(fitnessScores.Min());
+            int bestIndex = makespan.IndexOf(makespan.Min());
             return population[bestIndex];
         }
 
@@ -190,10 +227,19 @@ namespace jssp
                 population.Add(schedule);
             }
 
+            for (int i = 0; i < population.Count; i++)
+            {
+                Console.WriteLine($"Schedule {i + 1}:");
+                foreach (var operation in population[i])
+                {
+                    Console.WriteLine($"  JobId: {operation.JobId}, OperationId: {operation.OperationId}, Subdivision: {operation.Subdivision}, StartTime: {operation.StartTime}, EndTime: {operation.EndTime}");
+                }
+            }
+
             return population;
         }
 
-        public int CalculateMakespan(List<JobOperation> schedule)
+        public double FitnessFunction(List<JobOperation> schedule)
         {
             int makespan = 0;
             foreach (var operation in schedule)
@@ -203,14 +249,80 @@ namespace jssp
                     makespan = operation.EndTime;
                 }
             }
+            Console.WriteLine($"makespan {makespan}");
             return makespan;
         }
 
-        public double FitnessFunction(List<JobOperation> schedule)
+        private List<List<JobOperation>> SelectParents(List<List<JobOperation>> population, List<double> makespan)
         {
-            int makespan = CalculateMakespan(schedule);
-            // The fitness value is the inverse of the makespan to ensure that shorter makespans are better
-            return 1.0 / makespan;
+            var selectedParents = new List<List<JobOperation>>();
+            var rand = new Random();
+
+            for (int i = 0; i < populationSize; i++)
+            {
+                // Perform a tournament selection
+                int parent1Index = rand.Next(populationSize);
+                int parent2Index = rand.Next(populationSize);
+
+                // Select the parent with the better fitness (lower makespan)
+                if (makespan[parent1Index] < makespan[parent2Index])
+                {
+                    selectedParents.Add(population[parent1Index]);
+                }
+                else
+                {
+                    selectedParents.Add(population[parent2Index]);
+                }
+            }
+
+            return selectedParents;
+        }
+
+        private List<List<JobOperation>> Crossover(List<List<JobOperation>> parents)
+        {
+            var offspring = new List<List<JobOperation>>();
+            var rand = new Random();
+
+            for (int i = 0; i < parents.Count; i += 2)
+            {
+                if (i + 1 >= parents.Count)
+                {
+                    offspring.Add(parents[i]);
+                    continue;
+                }
+
+                var parent1 = parents[i];
+                var parent2 = parents[i + 1];
+
+                // Perform one-point crossover
+                int crossoverPoint = rand.Next(1, parent1.Count - 1);
+                var child1 = parent1.Take(crossoverPoint).Concat(parent2.Skip(crossoverPoint)).ToList();
+                var child2 = parent2.Take(crossoverPoint).Concat(parent1.Skip(crossoverPoint)).ToList();
+
+                offspring.Add(child1);
+                offspring.Add(child2);
+            }
+
+            return offspring;
+        }
+
+        private void Mutate(List<List<JobOperation>> population)
+        {
+            var rand = new Random();
+
+            foreach (var schedule in population)
+            {
+                if (rand.NextDouble() < mutationRate)
+                {
+                    // Swap two random operations in the schedule
+                    int index1 = rand.Next(schedule.Count);
+                    int index2 = rand.Next(schedule.Count);
+
+                    var temp = schedule[index1];
+                    schedule[index1] = schedule[index2];
+                    schedule[index2] = temp;
+                }
+            }
         }
     }
 
