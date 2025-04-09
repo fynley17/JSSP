@@ -8,11 +8,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="bin\Debug\net8.0\CSVs\jobs_huge.csv" />
-    <None Include="bin\Debug\net8.0\CSVs\jobs_large.csv" />
-    <None Include="bin\Debug\net8.0\CSVs\jobs_mid.csv" />
-    <None Include="bin\Debug\net8.0\CSVs\jobs_pleaseStop.csv" />
-    <None Include="bin\Debug\net8.0\CSVs\jobs_small.csv" />
+    <Compile Remove="bin\Debug\net8.0\CSVs\**" />
+    <EmbeddedResource Remove="bin\Debug\net8.0\CSVs\**" />
+    <None Remove="bin\Debug\net8.0\CSVs\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="bin\Debug\net8.0\" />
   </ItemGroup>
 
 </Project>
