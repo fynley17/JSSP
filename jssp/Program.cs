@@ -8,59 +8,50 @@ namespace jssp
 {
     public class JobShop
     {
-        private Random rand = new();
-
         public List<JobOperation> GenerateRandomSchedule(List<List<JobOperation>> jobs)
         {
             var schedule = new List<JobOperation>();
-            var allOperations = jobs.SelectMany(job => job).ToList();
+            var jobOperationIndices = new Dictionary<int, int>(); // Tracks the next operation index for each job
+            var machineAvailability = new Dictionary<int, int>(); // Tracks the next available time for each machine
+            var rand = new Random();
 
-            while (allOperations.Count > 0)
+            // Initialize job operation indices
+            for (int i = 0; i < jobs.Count; i++)
             {
-                var operation = allOperations[rand.Next(allOperations.Count)];
-                allOperations.Remove(operation);
+                jobOperationIndices[i] = 0;
+            }
+
+            // While there are still operations to schedule
+            while (schedule.Count < jobs.Sum(job => job.Count))
+            {
+                // Select a random job that still has unscheduled operations
+                var availableJobs = jobOperationIndices.Where(kvp => kvp.Value < jobs[kvp.Key].Count).Select(kvp => kvp.Key).ToList();
+                int randomJobIndex = availableJobs[rand.Next(availableJobs.Count)];
+                var operation = jobs[randomJobIndex][jobOperationIndices[randomJobIndex]];
+
+                // Determine the earliest start time for the operation
+                int previousOperationEndTime = 0;
+                if (jobOperationIndices[randomJobIndex] > 0)
+                {
+                    previousOperationEndTime = schedule.First(op => op.JobId == randomJobIndex && op.OperationId == operation.OperationId - 1).EndTime;
+                }
+
+                int machineAvailableTime = machineAvailability.ContainsKey(operation.SubdivisionId) ? machineAvailability[operation.SubdivisionId] : 0;
+                operation.StartTime = Math.Max(previousOperationEndTime, machineAvailableTime);
+                operation.EndTime = operation.StartTime + operation.ProcessingTime;
+
+                // Update machine availability and job operation index
+                machineAvailability[operation.SubdivisionId] = operation.EndTime;
+                jobOperationIndices[randomJobIndex]++;
+
+                // Add the operation to the schedule
                 schedule.Add(operation);
             }
 
             return schedule;
         }
-
-        public bool EnsureOrder(List<JobOperation> schedule)
-        {
-            var subdivisionEndTimes = new Dictionary<int, int>();
-
-            foreach (var operation in schedule)
-            {
-                int subdivisionId = operation.SubdivisionId;
-                int startTime = operation.StartTime;
-
-                if (subdivisionEndTimes.ContainsKey(subdivisionId))
-                {
-                    if (startTime < subdivisionEndTimes[subdivisionId])
-                    {
-                        return false; // Subdivision is used in parallel
-                    }
-                }
-
-                subdivisionEndTimes[subdivisionId] = operation.EndTime;
-            }
-
-            var jobs = schedule.GroupBy(op => op.JobId);
-            foreach (var job in jobs)
-            {
-                var operations = job.OrderBy(op => op.OperationId).ToList();
-                for (int i = 1; i < operations.Count; i++)
-                {
-                    if (operations[i].StartTime < operations[i - 1].EndTime)
-                    {
-                        return false; // Operations within a job are not in the correct order
-                    }
-                }
-            }
-
-            return true;
-        }
     }
+
     public class JobProcessor
     {
         public List<List<JobOperation>> ProcessCsv(string filePath)
