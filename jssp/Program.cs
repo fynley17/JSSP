@@ -1,86 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Reflection.Metadata.Ecma335;
-using System.Runtime.CompilerServices;
+using Models;
+using Algorithms;
 
 namespace jssp
 {
-    public class JobProcessor
-    {
-        public List<List<JobOperation>> ProcessCsv(string filePath)
-        {
-            var jobs = new List<List<JobOperation>>();
-            var subdivisionIds = new Dictionary<string, int>();
-            int nextSubdivisionId = 1;
-
-            using (var reader = new StreamReader(filePath))
-            {
-                // Skip the header line
-                reader.ReadLine();
-
-                while (!reader.EndOfStream)
-                {
-                    var line = reader.ReadLine();
-                    var values = line.Split(',');
-
-                    int jobId = int.Parse(values[0]);
-                    string subdivision = values[2];
-                    int processingTime = int.Parse(values[3]);
-
-                    // Assign a unique ID to the subdivision if it doesn't already have one
-                    if (!subdivisionIds.ContainsKey(subdivision))
-                    {
-                        subdivisionIds[subdivision] = nextSubdivisionId++;
-                    }
-                    int subdivisionId = subdivisionIds[subdivision];
-
-                    var jobOperation = new JobOperation
-                    {
-                        JobId = jobId,
-                        Subdivision = subdivision,
-                        SubdivisionId = subdivisionId,
-                        ProcessingTime = processingTime
-                    };
-
-                    // Ensure the list is large enough to hold the jobId index
-                    while (jobs.Count <= jobId)
-                    {
-                        jobs.Add(new List<JobOperation>());
-                    }
-
-                    // Assign a sequential OperationId within the job
-                    jobOperation.OperationId = jobs[jobId].Count;
-
-                    jobs[jobId].Add(jobOperation);
-                }
-            }
-
-            return jobs;
-        }
-    }
-
-    class Files
-    {
-        public static void directoryExists(string directory_path)
-        {
-            if (!Directory.Exists(directory_path))
-            {
-                Console.WriteLine("Directory doesn't exist");
-                return;
-            }
-        }
-
-        public static void filesExists(string[] files)
-        {
-            if (files.Length == 0)
-            {
-                Console.WriteLine("No .csv files found in the directory.");
-                return;
-            }
-        }
-    }
-
     internal class Program
     {
         static void Main(string[] args)
@@ -120,49 +45,50 @@ namespace jssp
 
             // Process the selected CSV file
             var jobProcessor = new JobProcessor();
-            var jobs = jobProcessor.ProcessCsv(schedule);
+            var Jobs = jobProcessor.ProcessCsv(schedule);
 
-            // Display the jobs and their operations
-            for (int jobId = 0; jobId < jobs.Count; jobId++)
-            {
-                var jobOperations = jobs[jobId];
-                if (jobOperations.Count > 0)
-                {
-                    Console.WriteLine($"JobId: {jobId}");
-                    foreach (var operation in jobOperations)
-                    {
-                        Console.WriteLine($"  OperationId: {operation.OperationId}, Subdivision: {operation.Subdivision}, SubdivisionId: {operation.SubdivisionId}, ProcessingTime: {operation.ProcessingTime}");
-                    }
-                }
-            }
+            // Solve the scheduling problem using the Genetic Algorithm
+            var ga = new GA(Jobs);
+            var bestSchedule = ga.Solve();
 
-            string filePath = Path.Combine(base_directory, "output.csv");
+            // Output the fitness of the best schedule
+            Console.WriteLine($"Fitness of the best schedule: {GA.Evaluate(bestSchedule, Jobs) - 1}");
+
             // Output the best schedule as a table
-            SchedulePrinter.PrintScheduleAsCsv(bestSchedule, filePath);
+            string outputFilePath = Path.Combine(base_directory, "output.csv");
+            SchedulePrinter.PrintScheduleAsCsv(Jobs, bestSchedule, outputFilePath);
+
+            Console.WriteLine($"Best schedule saved to {outputFilePath}");
         }
 
         public static class SchedulePrinter
         {
-            public static void PrintScheduleAsCsv(List<JobOperation> schedule, string filePath)
+            public static void PrintScheduleAsCsv(List<Job> jobs, Schedule schedule, string filePath)
             {
                 // Determine the maximum end time
                 int maxEndTime = 0;
-                foreach (var operation in schedule)
+                foreach (var job in jobs)
                 {
-                    if (operation.EndTime > maxEndTime)
+                    foreach (var operation in job.Operations)
                     {
-                        maxEndTime = operation.EndTime;
+                        if (operation.EndTime > maxEndTime)
+                        {
+                            maxEndTime = operation.EndTime;
+                        }
                     }
                 }
 
                 // Create a dictionary to map subdivision names to column indices
                 var subdivisionNames = new Dictionary<string, int>();
                 int nextColumnIndex = 0;
-                foreach (var operation in schedule)
+                foreach (var job in jobs)
                 {
-                    if (!subdivisionNames.ContainsKey(operation.Subdivision))
+                    foreach (var operation in job.Operations)
                     {
-                        subdivisionNames[operation.Subdivision] = nextColumnIndex++;
+                        if (!subdivisionNames.ContainsKey(operation.Subdivision))
+                        {
+                            subdivisionNames[operation.Subdivision] = nextColumnIndex++;
+                        }
                     }
                 }
 
@@ -170,12 +96,15 @@ namespace jssp
                 var table = new string[maxEndTime + 1, subdivisionNames.Count];
 
                 // Populate the table with JobId and OperationId
-                foreach (var operation in schedule)
+                foreach (var job in jobs)
                 {
-                    int columnIndex = subdivisionNames[operation.Subdivision];
-                    for (int time = operation.StartTime; time < operation.EndTime; time++)
+                    foreach (var operation in job.Operations)
                     {
-                        table[time, columnIndex] = $"J{operation.JobId}O{operation.OperationId}";
+                        int columnIndex = subdivisionNames[operation.Subdivision];
+                        for (int time = operation.StartTime; time < operation.EndTime; time++)
+                        {
+                            table[time, columnIndex] = $"J{operation.JobId}O{operation.OperationId}";
+                        }
                     }
                 }
 
@@ -202,6 +131,59 @@ namespace jssp
                     }
                 }
             }
+        }
+    }
+
+    class Files
+    {
+        public static void directoryExists(string directory_path)
+        {
+            if (!Directory.Exists(directory_path))
+            {
+                Console.WriteLine("Directory doesn't exist");
+                Environment.Exit(1);
+            }
+        }
+
+        public static void filesExists(string[] files)
+        {
+            if (files.Length == 0)
+            {
+                Console.WriteLine("No .csv files found in the directory.");
+                Environment.Exit(1);
+            }
+        }
+    }
+
+    public class JobProcessor
+    {
+        public List<Job> ProcessCsv(string filePath)
+        {
+            string[] lines = File.ReadAllLines(filePath);
+
+            List<Operation> operations = lines.Skip(1) // Skip header
+                .Select(static line => line.Split(','))
+                .Select(static values => new Operation
+                {
+                    JobId = int.Parse(values[0]),
+                    OperationId = int.Parse(values[1]),
+                    Subdivision = values[2],
+                    ProcessingTime = int.Parse(values[3])
+                })
+                .ToList();
+
+            // Group operations by JobId
+            IEnumerable<Job> jobGroups = operations
+                .GroupBy(op => op.JobId)
+                .Select(static group => new Job
+                {
+                    JobId = group.Key,
+                    Operations = group
+                        .OrderBy(static op => op.OperationId) // Ensure operations are in order
+                        .ToList()
+                });
+
+            return jobGroups.ToList();
         }
     }
 }
