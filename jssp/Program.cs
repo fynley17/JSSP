@@ -6,75 +6,6 @@ using System.Runtime.CompilerServices;
 
 namespace jssp
 {
-    public class JobShop
-    {
-        public List<JobOperation> GenerateRandomSchedule(List<List<JobOperation>> jobs)
-        {
-            var schedule = new List<JobOperation>();
-            var jobOperationIndices = new Dictionary<int, int>(); // Tracks the next operation index for each job
-            var machineAvailability = new Dictionary<int, int>(); // Tracks the next available time for each machine
-            var rand = new Random(Guid.NewGuid().GetHashCode()); // Use a unique seed for randomness
-
-            // Initialize job operation indices
-            for (int i = 0; i < jobs.Count; i++)
-            {
-                jobOperationIndices[i] = 0;
-            }
-
-            // While there are still operations to schedule
-            while (schedule.Count < jobs.Sum(job => job.Count))
-            {
-                // Select a random job that still has unscheduled operations
-                var availableJobs = jobOperationIndices
-                    .Where(kvp => kvp.Value < jobs[kvp.Key].Count)
-                    .Select(kvp => kvp.Key)
-                    .OrderBy(_ => rand.Next()) // Shuffle the available jobs to introduce randomness
-                    .ToList();
-
-                if (availableJobs.Count == 0)
-                {
-                    throw new InvalidOperationException("No available jobs to schedule. Check job data integrity.");
-                }
-
-                // Randomly select a job from the shuffled available jobs
-                int randomJobIndex = availableJobs.First();
-                var operation = jobs[randomJobIndex][jobOperationIndices[randomJobIndex]];
-
-                // Determine the earliest start time for the operation
-                int previousOperationEndTime = 0;
-                if (jobOperationIndices[randomJobIndex] > 0)
-                {
-                    previousOperationEndTime = schedule
-                        .First(op => op.JobId == randomJobIndex && op.OperationId == operation.OperationId - 1)
-                        .EndTime;
-                }
-
-                int machineAvailableTime = machineAvailability.ContainsKey(operation.SubdivisionId)
-                    ? machineAvailability[operation.SubdivisionId]
-                    : 0;
-
-                operation.StartTime = Math.Max(previousOperationEndTime, machineAvailableTime);
-                operation.EndTime = operation.StartTime + operation.ProcessingTime;
-
-                // Update machine availability and job operation index
-                machineAvailability[operation.SubdivisionId] = operation.EndTime;
-                jobOperationIndices[randomJobIndex]++;
-
-                // Add the operation to the schedule
-                schedule.Add(operation);
-            }
-
-            // Verify that all operations are included
-            int totalOperations = jobs.Sum(job => job.Count);
-            if (schedule.Count != totalOperations)
-            {
-                throw new InvalidOperationException($"Schedule generation failed. Expected {totalOperations} operations, but got {schedule.Count}.");
-            }
-
-            return schedule;
-        }
-    }
-
     public class JobProcessor
     {
         public List<List<JobOperation>> ProcessCsv(string filePath)
@@ -129,17 +60,6 @@ namespace jssp
         }
     }
 
-    public class JobOperation
-    {
-        public int JobId { get; set; }
-        public int OperationId { get; set; }
-        public string Subdivision { get; set; }
-        public int SubdivisionId { get; set; }
-        public int ProcessingTime { get; set; }
-        public int StartTime { get; set; }
-        public int EndTime { get; set; }
-    }
-
     class Files
     {
         public static void directoryExists(string directory_path)
@@ -157,171 +77,6 @@ namespace jssp
             {
                 Console.WriteLine("No .csv files found in the directory.");
                 return;
-            }
-        }
-    }
-
-    public class GA
-    {
-        private int populationSize;
-        private double mutationRate;
-        private int maxGenerations;
-        private Random rand = new();
-
-        public GA(int populationSize, double mutationRate, int maxGenerations)
-        {
-            this.populationSize = populationSize;
-            this.mutationRate = mutationRate;
-            this.maxGenerations = maxGenerations;
-        }
-
-        public List<JobOperation> Run(List<List<JobOperation>> jobs)
-        {
-            // Initialize population
-            var population = InitialisePopulation(jobs);
-
-            // Evaluate fitness of initial population
-            var makespan = new List<double>();
-            foreach (var schedule in population)
-            {
-                makespan.Add(FitnessFunction(schedule));
-            }
-
-            // Genetic Algorithm main loop
-            for (int generation = 0; generation < maxGenerations; generation++)
-            {
-                // Selection: Select parents based on fitness (lower makespan is better)
-                var selectedParents = SelectParents(population, makespan);
-
-                // Crossover: Create offspring by combining parents
-                var offspring = Crossover(selectedParents);
-
-                // Mutation: Introduce random changes to offspring
-                Mutate(offspring);
-
-                // Evaluate fitness of new population
-                population = offspring;
-                makespan.Clear();
-                foreach (var schedule in population)
-                {
-                    makespan.Add(FitnessFunction(schedule));
-                }
-
-                Console.WriteLine($"Generation {generation + 1}: Best Makespan = {makespan.Min()}");
-            }
-
-            // Return the best schedule
-            int bestIndex = makespan.IndexOf(makespan.Min());
-            return population[bestIndex];
-        }
-
-        private List<List<JobOperation>> InitialisePopulation(List<List<JobOperation>> jobs)
-        {
-            // Initialize the population with random schedules
-            var population = new List<List<JobOperation>>();
-            var jobShop = new JobShop();
-
-            for (int i = 0; i < populationSize; i++)
-            {
-                var schedule = jobShop.GenerateRandomSchedule(jobs);
-                population.Add(schedule);
-            }
-
-            for (int i = 0; i < population.Count; i++)
-            {
-                Console.WriteLine($"Schedule {i + 1}:");
-                foreach (var operation in population[i])
-                {
-                    Console.WriteLine($"  JobId: {operation.JobId}, OperationId: {operation.OperationId}, Subdivision: {operation.Subdivision}, StartTime: {operation.StartTime}, EndTime: {operation.EndTime}");
-                }
-            }
-
-            return population;
-        }
-
-        public double FitnessFunction(List<JobOperation> schedule)
-        {
-            int makespan = 0;
-            foreach (var operation in schedule)
-            {
-                if (operation.EndTime > makespan)
-                {
-                    makespan = operation.EndTime;
-                }
-            }
-            Console.WriteLine($"makespan {makespan}");
-            return makespan;
-        }
-
-        private List<List<JobOperation>> SelectParents(List<List<JobOperation>> population, List<double> makespan)
-        {
-            var selectedParents = new List<List<JobOperation>>();
-            var rand = new Random();
-
-            for (int i = 0; i < populationSize; i++)
-            {
-                // Perform a tournament selection
-                int parent1Index = rand.Next(populationSize);
-                int parent2Index = rand.Next(populationSize);
-
-                // Select the parent with the better fitness (lower makespan)
-                if (makespan[parent1Index] < makespan[parent2Index])
-                {
-                    selectedParents.Add(population[parent1Index]);
-                }
-                else
-                {
-                    selectedParents.Add(population[parent2Index]);
-                }
-            }
-
-            return selectedParents;
-        }
-
-        private List<List<JobOperation>> Crossover(List<List<JobOperation>> parents)
-        {
-            var offspring = new List<List<JobOperation>>();
-            var rand = new Random();
-
-            for (int i = 0; i < parents.Count; i += 2)
-            {
-                if (i + 1 >= parents.Count)
-                {
-                    offspring.Add(parents[i]);
-                    continue;
-                }
-
-                var parent1 = parents[i];
-                var parent2 = parents[i + 1];
-
-                // Perform one-point crossover
-                int crossoverPoint = rand.Next(1, parent1.Count - 1);
-                var child1 = parent1.Take(crossoverPoint).Concat(parent2.Skip(crossoverPoint)).ToList();
-                var child2 = parent2.Take(crossoverPoint).Concat(parent1.Skip(crossoverPoint)).ToList();
-
-                offspring.Add(child1);
-                offspring.Add(child2);
-            }
-
-            return offspring;
-        }
-
-        private void Mutate(List<List<JobOperation>> population)
-        {
-            var rand = new Random();
-
-            foreach (var schedule in population)
-            {
-                if (rand.NextDouble() < mutationRate)
-                {
-                    // Swap two random operations in the schedule
-                    int index1 = rand.Next(schedule.Count);
-                    int index2 = rand.Next(schedule.Count);
-
-                    var temp = schedule[index1];
-                    schedule[index1] = schedule[index2];
-                    schedule[index2] = temp;
-                }
             }
         }
     }
@@ -380,10 +135,6 @@ namespace jssp
                     }
                 }
             }
-
-            // Run the Genetic Algorithm
-            var ga = new GA(populationSize: 100, mutationRate: 0.01, maxGenerations: 100);
-            var bestSchedule = ga.Run(jobs);
 
             string filePath = Path.Combine(base_directory, "output.csv");
             // Output the best schedule as a table
