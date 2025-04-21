@@ -8,7 +8,6 @@ namespace Algorithms
     public class GA
     {
         private const int PopulationSize = 100;
-        private const double MutationRate = 0.01;
         private const int Generations = 1000;
         private const int TournamentSize = 5;
 
@@ -28,8 +27,8 @@ namespace Algorithms
 
             for (int g = 0; g < Generations; g++)
             {
-                foreach (Schedule s in population)
-                    s.Fitness = Evaluate(s, _jobs.Select(j => new Job
+                foreach (Schedule schedule in population)
+                    schedule.Fitness = Evaluate(schedule, _jobs.Select(j => new Job
                     {
                         JobId = j.JobId,
                         Operations = j.Operations.Select(o => new Operation
@@ -110,6 +109,49 @@ namespace Algorithms
             }
 
             return time;
+        }
+
+        private Schedule Selection(List<Schedule> population) => population.OrderBy(x => _random.Next()).Take(TournamentSize).OrderBy(c => c.Fitness).First();
+
+        private Schedule Crossover(Schedule parent1, Schedule parent2)
+        {
+            int size = parent1.JobOrder.Count;
+            List<int> child = new(new int[size]);
+            Dictionary<int, int> used = new();
+
+            int start = _random.Next(size / 2);
+            int end = _random.Next(start + 1, size);
+
+            for (int i = start; i < end; i++)
+            {
+                child[i] = parent1.JobOrder[i];
+                used.TryAdd(child[i], 0);
+                used[child[i]]++;
+            }
+
+            int parent2Index = 0;
+            for (int i = 0; i < size; i++)
+            {
+                if (i >= start && i < end)
+                    continue;
+                while (used.TryGetValue(parent2.JobOrder[parent2Index], out int count) &&
+                        count >= _jobs.First(j => j.JobId == parent2.JobOrder[parent2Index]).Operations.Count)
+                    parent2Index++;
+
+                int gene = parent2.JobOrder[parent2Index++];
+                child[i] = gene;
+                used.TryAdd(gene, 0);
+                used[gene]++;
+            }
+
+            return new Schedule { JobOrder = child };
+        }
+
+        private void Mutate(Schedule schedule)
+        {
+            int a = _random.Next(schedule.JobOrder.Count);
+            int b = _random.Next(schedule.JobOrder.Count);
+            (schedule.JobOrder[a], schedule.JobOrder[b]) = (schedule.JobOrder[b], schedule.JobOrder[a]);
         }
     }
 }
