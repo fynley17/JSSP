@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Diagnostics; // Add this at the top of the file
 using Models;
 
 namespace Algorithms
@@ -22,6 +23,8 @@ namespace Algorithms
 
         public Schedule Solve()
         {
+            Stopwatch stopwatch = Stopwatch.StartNew(); // Start the stopwatch
+
             List<Schedule> population = InitialisePopulation();
 
             Schedule best = population[0];
@@ -63,6 +66,9 @@ namespace Algorithms
 
                 population = newPopulation;
             }
+
+            stopwatch.Stop(); // Stop the stopwatch
+            Console.WriteLine($"Time taken to find the optimal solution: {stopwatch.ElapsedMilliseconds} ms"); // Output the elapsed time in milliseconds
 
             return best;
         }
