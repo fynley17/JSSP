@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Models;
 
 namespace Algorithms
@@ -12,7 +13,7 @@ namespace Algorithms
         private const int TournamentSize = 5;
 
         private readonly List<Job> _jobs;
-        private readonly Random _random = new Random();
+        private readonly Random rand = new Random();
 
         public GA(List<Job> jobs)
         {
@@ -27,7 +28,9 @@ namespace Algorithms
 
             for (int g = 0; g < Generations; g++)
             {
-                foreach (Schedule schedule in population)
+                // Parallelize the fitness evaluation
+                Parallel.ForEach(population, schedule =>
+                {
                     schedule.Fitness = Evaluate(schedule, _jobs.Select(j => new Job
                     {
                         JobId = j.JobId,
@@ -39,6 +42,7 @@ namespace Algorithms
                             ProcessingTime = o.ProcessingTime
                         }).ToList()
                     }).ToList());
+                });
 
                 population = population.OrderBy(c => c.Fitness).ToList();
                 if (population[0].Fitness < best.Fitness)
@@ -70,7 +74,7 @@ namespace Algorithms
 
             for (int i = 0; i < PopulationSize; i++)
             {
-                List<int> genes = Pool.OrderBy(x => _random.Next()).ToList();
+                List<int> genes = Pool.OrderBy(x => rand.Next()).ToList();
                 population.Add(new Schedule { JobOrder = genes });
             }
 
@@ -83,7 +87,7 @@ namespace Algorithms
             Dictionary<int, int> JopAvalible = new();
             foreach (Job job in jobs)
             {
-                job.Reset();
+                job.ResetOpIndex();
                 JopAvalible[job.JobId] = 0;
             }
 
@@ -111,7 +115,7 @@ namespace Algorithms
             return time;
         }
 
-        private Schedule Selection(List<Schedule> population) => population.OrderBy(x => _random.Next()).Take(TournamentSize).OrderBy(c => c.Fitness).First();
+        private Schedule Selection(List<Schedule> population) => population.OrderBy(x => rand.Next()).Take(TournamentSize).OrderBy(c => c.Fitness).First();
 
         private Schedule Crossover(Schedule parent1, Schedule parent2)
         {
@@ -119,8 +123,8 @@ namespace Algorithms
             List<int> child = new(new int[size]);
             Dictionary<int, int> used = new();
 
-            int start = _random.Next(size / 2);
-            int end = _random.Next(start + 1, size);
+            int start = rand.Next(size / 2);
+            int end = rand.Next(start + 1, size);
 
             for (int i = start; i < end; i++)
             {
@@ -149,8 +153,8 @@ namespace Algorithms
 
         private void Mutate(Schedule schedule)
         {
-            int a = _random.Next(schedule.JobOrder.Count);
-            int b = _random.Next(schedule.JobOrder.Count);
+            int a = rand.Next(schedule.JobOrder.Count);
+            int b = rand.Next(schedule.JobOrder.Count);
             (schedule.JobOrder[a], schedule.JobOrder[b]) = (schedule.JobOrder[b], schedule.JobOrder[a]);
         }
     }
