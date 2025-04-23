@@ -53,16 +53,19 @@ namespace Algorithms
 
                 List<Schedule> newPopulation = new List<Schedule> { best.Clone() }; // elitism
 
-                while (newPopulation.Count < PopulationSize)
+                Parallel.For(0, PopulationSize - 1, _ =>
                 {
-                    Schedule parent1 = Selection(population);
-                    Schedule parent2 = Selection(population);
+                    Schedule parent1 = RouletteWheelSelection(population);
+                    Schedule parent2 = RouletteWheelSelection(population);
 
                     Schedule child = Crossover(parent1, parent2);
                     Mutate(child);
 
-                    newPopulation.Add(child);
-                }
+                    lock (newPopulation) // Ensure thread safety when adding to the shared list
+                    {
+                        newPopulation.Add(child);
+                    }
+                });
 
                 population = newPopulation;
             }
@@ -78,42 +81,47 @@ namespace Algorithms
             List<int> Pool = _jobs.SelectMany(j => Enumerable.Repeat(j.JobId, j.Operations.Count)).ToList();
             List<Schedule> population = new List<Schedule>();
 
-            for (int i = 0; i < PopulationSize; i++)
+            Parallel.For(0, PopulationSize, i =>
             {
                 List<int> genes = Pool.OrderBy(x => rand.Next()).ToList();
-                population.Add(new Schedule { JobOrder = genes });
-            }
+                lock (population) // Ensure thread safety when adding to the shared list
+                {
+                    population.Add(new Schedule { JobOrder = genes });
+                }
+            });
 
             return population;
         }
 
         public static int Evaluate(Schedule schedule, List<Job> jobs)
         {
-            Dictionary<string, int> mAvalible = new();
-            Dictionary<int, int> JopAvalible = new();
+            Dictionary<int, Job> jobDict = jobs.ToDictionary(j => j.JobId);
+            Dictionary<string, int> mAvailable = new();
+            Dictionary<int, int> jobAvailable = new();
+
             foreach (Job job in jobs)
             {
                 job.ResetOpIndex();
-                JopAvalible[job.JobId] = 0;
+                jobAvailable[job.JobId] = 0;
             }
 
             int time = 0;
 
-            foreach (int JobId in schedule.JobOrder)
+            foreach (int jobId in schedule.JobOrder)
             {
-                Job job = jobs.First(j => j.JobId == JobId);
+                Job job = jobDict[jobId];
                 Operation operation = job.NextOperation();
 
                 string machine = operation.Subdivision;
 
                 int ready = Math.Max(
-                    JopAvalible[JobId],
-                    mAvalible.TryGetValue(machine, out int mTime) ? mTime : 0
+                    jobAvailable[jobId],
+                    mAvailable.TryGetValue(machine, out int mTime) ? mTime : 0
                 );
 
                 operation.StartTime = ready;
-                mAvalible[machine] = operation.EndTime;
-                JopAvalible[JobId] = operation.EndTime;
+                mAvailable[machine] = operation.EndTime;
+                jobAvailable[jobId] = operation.EndTime;
 
                 time = Math.Max(time, operation.EndTime);
             }
@@ -159,9 +167,32 @@ namespace Algorithms
 
         private void Mutate(Schedule schedule)
         {
-            int a = rand.Next(schedule.JobOrder.Count);
-            int b = rand.Next(schedule.JobOrder.Count);
-            (schedule.JobOrder[a], schedule.JobOrder[b]) = (schedule.JobOrder[b], schedule.JobOrder[a]);
+            int start = rand.Next(schedule.JobOrder.Count);
+            int end = rand.Next(start, schedule.JobOrder.Count);
+            schedule.JobOrder.Reverse(start, end - start + 1);
+        }
+
+        private Schedule RouletteWheelSelection(List<Schedule> population)
+        {
+            // Calculate the total fitness of the population
+            double totalFitness = population.Sum(individual => 1.0 / individual.Fitness); // Inverse fitness for minimization
+
+            // Generate a random value between 0 and the total fitness
+            double randomValue = rand.NextDouble() * totalFitness;
+
+            // Iterate through the population to find the selected individual
+            double cumulativeFitness = 0.0;
+            foreach (var individual in population)
+            {
+                cumulativeFitness += 1.0 / individual.Fitness; // Inverse fitness for minimization
+                if (cumulativeFitness >= randomValue)
+                {
+                    return individual;
+                }
+            }
+
+            // Fallback (shouldn't happen if the logic is correct)
+            return population.Last();
         }
     }
 }
