@@ -55,8 +55,9 @@ namespace Algorithms
 
                 Parallel.For(0, PopulationSize - 1, _ =>
                 {
-                    Schedule parent1 = RouletteWheelSelection(population);
-                    Schedule parent2 = RouletteWheelSelection(population);
+
+                    Schedule parent1 = Selection(population);
+                    Schedule parent2 = Selection(population);
 
                     Schedule child = Crossover(parent1, parent2);
                     Mutate(child);
