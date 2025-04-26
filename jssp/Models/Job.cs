@@ -6,12 +6,12 @@ namespace Models
     {
         public int JobId { get; set; }
         public List<Operation> Operations { get; set; } = new();
-        public int NextOpperationIndex { get; set; } = 0;
+        public int NextOperationIndex { get; set; } = 0;
 
-        public bool IsNextOperation => NextOpperationIndex < Operations.Count;
+        public bool IsNextOperation => NextOperationIndex < Operations.Count;
 
-        public Operation NextOperation() => Operations[NextOpperationIndex++];
+        public Operation NextOperation() => Operations[NextOperationIndex++];
 
-        public void ResetOpIndex() => NextOpperationIndex = 0;
+        public void ResetOpIndex() => NextOperationIndex = 0;
     }
 }
