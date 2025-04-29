@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.12.35707.178 d17.12
+VisualStudioVersion = 17.12.35707.178
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jssp", "jssp.csproj", "{0A1D3ACB-217B-4AE4-9827-FC85955FE521}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jssp.test", "..\jssp.test\jssp.test.csproj", "{EA6FDBA6-59BF-452B-8FDA-B8F7C99190CE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,8 +17,15 @@ Global
 		{0A1D3ACB-217B-4AE4-9827-FC85955FE521}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0A1D3ACB-217B-4AE4-9827-FC85955FE521}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0A1D3ACB-217B-4AE4-9827-FC85955FE521}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EA6FDBA6-59BF-452B-8FDA-B8F7C99190CE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EA6FDBA6-59BF-452B-8FDA-B8F7C99190CE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EA6FDBA6-59BF-452B-8FDA-B8F7C99190CE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EA6FDBA6-59BF-452B-8FDA-B8F7C99190CE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1AE39463-78E3-4AAD-B3FA-19B93C09D0F3}
 	EndGlobalSection
 EndGlobal
