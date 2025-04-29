@@ -10,7 +10,7 @@ namespace Algorithms
     public class GA
     {
         private const int PopulationSize = 100;
-        private const int Generations = 1000;
+        private const int Generations = 100;
         private const int TournamentSize = 5;
 
         private readonly List<Job> _jobs;
