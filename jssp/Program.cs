@@ -1,136 +1,133 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using Terminal.Gui;
 using jssp.Models;
 using Algorithms;
+using System.Diagnostics;
 
 namespace jssp
 {
     internal class Program
     {
+        private static Dictionary<string, string> filePathMap;
+
         static void Main(string[] args)
         {
-            string base_directory = AppDomain.CurrentDomain.BaseDirectory;
-            string relative_path = @"CSVs";
-            string directory_path = Path.Combine(base_directory, relative_path);
-            Files.directoryExists(directory_path);
+            Application.Init();
 
-            string[] files = Directory.GetFiles(directory_path, "*.csv");
-            Files.filesExists(files);
+            var top = Application.Top;
+            var mainWindow = new Window("Job Scheduling Problem") { X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill() };
 
-            // Display the list of files
-            for (int i = 0; i < files.Length; i++)
+            // File selection list
+            var fileListView = new ListView() { X = 1, Y = 1, Width = Dim.Fill() - 2, Height = Dim.Fill() - 6 };
+            var files = GetCsvFiles();
+            fileListView.SetSource(files);
+
+            // Buttons
+            var processButton = new Button("Process File") { X = 1, Y = Pos.Bottom(fileListView) + 1 };
+            var exportButton = new Button("Export to CSV") { X = Pos.Right(processButton) + 2, Y = Pos.Top(processButton) };
+            var openButton = new Button("Open CSV") { X = Pos.Right(exportButton) + 2, Y = Pos.Top(processButton) };
+
+            // Status label
+            var statusLabel = new Label("Select a file and click 'Process File'") { X = 1, Y = Pos.Bottom(processButton) + 1, Width = Dim.Fill() };
+
+            // Add components to the main window
+            mainWindow.Add(fileListView, processButton, exportButton, openButton, statusLabel);
+            top.Add(mainWindow);
+
+            string selectedFile = null;
+            List<Job> jobs = null;
+            Schedule bestSchedule = null;
+            string outputFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "output.csv");
+
+            // Process file button click
+            processButton.Clicked += () =>
             {
-                Console.WriteLine(i + 1 + ": " + Path.GetFileName(files[i]));
-            }
+                if (fileListView.SelectedItem < 0 || fileListView.SelectedItem >= files.Count)
+                {
+                    statusLabel.Text = "Please select a valid file.";
+                    return;
+                }
 
-            // Ask the user to pick a file
-            Console.WriteLine("Enter the number of the file you want to select:");
-            int choice;
+                selectedFile = filePathMap[files[fileListView.SelectedItem]];
+                statusLabel.Text = $"Processing file: {Path.GetFileName(selectedFile)}";
 
-            // Validate input and ensure the choice is a valid number
-            bool validChoice = int.TryParse(Console.ReadLine(), out choice);
+                try
+                {
+                    var jobProcessor = new JobProcessor();
+                    jobs = jobProcessor.ProcessCsv(selectedFile);
 
-            if (!validChoice || choice < 1 || choice > files.Length)
+                    var ga = new GA(jobs);
+                    Stopwatch stopwatch = Stopwatch.StartNew(); // Start the stopwatch
+                    bestSchedule = ga.Solve();
+                    stopwatch.Stop(); // Stop the stopwatch
+                    statusLabel.Text = $"File processed in {stopwatch.ElapsedMilliseconds}ms.\nBest fitness: {GA.Evaluate(bestSchedule, jobs)}";
+                }
+                catch (Exception ex)
+                {
+                    statusLabel.Text = $"Error processing file: {ex.Message}";
+                }
+            };
+
+            // Export to CSV button click
+            exportButton.Clicked += () =>
             {
-                Console.WriteLine("Invalid choice. Please select a valid number.");
-                return;
-            }
+                if (bestSchedule == null || jobs == null)
+                {
+                    statusLabel.Text = "No schedule to export. Process a file first.";
+                    return;
+                }
 
-            // Store the full path of the selected file in the 'schedule' variable
-            string schedule = files[choice - 1];
+                try
+                {
+                    SchedulePrinter.PrintScheduleAsCsv(jobs, bestSchedule, outputFilePath);
+                    statusLabel.Text = $"Schedule exported to {outputFilePath}";
+                }
+                catch (Exception ex)
+                {
+                    statusLabel.Text = $"Error exporting file: {ex.Message}";
+                }
+            };
 
-            // Output the selected file's path
-            Console.WriteLine("You selected: " + Path.GetFileName(schedule));
+            // Open CSV button click
+            openButton.Clicked += () =>
+            {
+                if (!File.Exists(outputFilePath))
+                {
+                    statusLabel.Text = "No exported file found. Export a schedule first.";
+                    return;
+                }
 
-            // Process the selected CSV file
-            var jobProcessor = new JobProcessor();
-            var Jobs = jobProcessor.ProcessCsv(schedule);
+                try
+                {
+                    System.Diagnostics.Process.Start("explorer.exe", outputFilePath);
+                }
+                catch (Exception ex)
+                {
+                    statusLabel.Text = $"Error opening file: {ex.Message}";
+                }
+            };
 
-            // Solve the scheduling problem using the Genetic Algorithm
-            var ga = new GA(Jobs);
-            var bestSchedule = ga.Solve();
-
-            // Output the fitness of the best schedule
-            Console.WriteLine($"Fitness of the best schedule: {GA.Evaluate(bestSchedule, Jobs)}");
-
-            // Output the best schedule as a table
-            string outputFilePath = Path.Combine(base_directory, "output.csv");
-            SchedulePrinter.PrintScheduleAsCsv(Jobs, bestSchedule, outputFilePath);
-
-            Console.WriteLine($"Best schedule saved to {outputFilePath}");
+            Application.Run();
         }
 
-        public static class SchedulePrinter
+        private static List<string> GetCsvFiles()
         {
-            public static void PrintScheduleAsCsv(List<Job> jobs, Schedule schedule, string filePath)
-            {
-                // Determine the maximum end time
-                int maxEndTime = 0;
-                foreach (var job in jobs)
-                {
-                    foreach (var operation in job.Operations)
-                    {
-                        if (operation.EndTime > maxEndTime)
-                        {
-                            maxEndTime = operation.EndTime;
-                        }
-                    }
-                }
+            string baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+            string relativePath = @"CSVs";
+            string directoryPath = Path.Combine(baseDirectory, relativePath);
 
-                // Create a dictionary to map subdivision names to column indices
-                var subdivisionNames = new Dictionary<string, int>();
-                int nextColumnIndex = 0;
-                foreach (var job in jobs)
-                {
-                    foreach (var operation in job.Operations)
-                    {
-                        if (!subdivisionNames.ContainsKey(operation.Subdivision))
-                        {
-                            subdivisionNames[operation.Subdivision] = nextColumnIndex++;
-                        }
-                    }
-                }
+            Files.directoryExists(directoryPath);
 
-                // Initialize a 2D array to represent the table
-                var table = new string[maxEndTime + 1, subdivisionNames.Count];
+            string[] files = Directory.GetFiles(directoryPath, "*.csv");
+            Files.filesExists(files);
 
-                // Populate the table with JobId and OperationId
-                foreach (var job in jobs)
-                {
-                    foreach (var operation in job.Operations)
-                    {
-                        int columnIndex = subdivisionNames[operation.Subdivision];
-                        for (int time = operation.StartTime; time < operation.EndTime; time++)
-                        {
-                            table[time, columnIndex] = $"J{operation.JobId}O{operation.OperationId}";
-                        }
-                    }
-                }
+            // Create a mapping of filenames to full paths
+            filePathMap = files.ToDictionary(Path.GetFileName, fullPath => fullPath);
 
-                // Open a StreamWriter to write to the CSV file
-                using (var writer = new StreamWriter(filePath))
-                {
-                    // Write the table header
-                    writer.Write("Time,");
-                    foreach (var subdivisionName in subdivisionNames.Keys)
-                    {
-                        writer.Write($"{subdivisionName},");
-                    }
-                    writer.WriteLine();
-
-                    // Write the table rows
-                    for (int time = 0; time <= maxEndTime; time++)
-                    {
-                        writer.Write($"{time},");
-                        for (int columnIndex = 0; columnIndex < subdivisionNames.Count; columnIndex++)
-                        {
-                            writer.Write($"{table[time, columnIndex] ?? string.Empty},");
-                        }
-                        writer.WriteLine();
-                    }
-                }
-            }
+            // Return only the filenames
+            return filePathMap.Keys.ToList();
         }
     }
 
@@ -184,6 +181,78 @@ namespace jssp
                 });
 
             return jobGroups.ToList();
+        }
+    }
+
+    public static class SchedulePrinter
+    {
+        public static void PrintScheduleAsCsv(List<Job> jobs, Schedule schedule, string filePath)
+        {
+            // Determine the maximum end time
+            int maxEndTime = 0;
+            foreach (var job in jobs)
+            {
+                foreach (var operation in job.Operations)
+                {
+                    if (operation.EndTime > maxEndTime)
+                    {
+                        maxEndTime = operation.EndTime;
+                    }
+                }
+            }
+
+            // Create a dictionary to map subdivision names to column indices
+            var subdivisionNames = new Dictionary<string, int>();
+            int nextColumnIndex = 0;
+            foreach (var job in jobs)
+            {
+                foreach (var operation in job.Operations)
+                {
+                    if (!subdivisionNames.ContainsKey(operation.Subdivision))
+                    {
+                        subdivisionNames[operation.Subdivision] = nextColumnIndex++;
+                    }
+                }
+            }
+
+            // Initialize a 2D array to represent the table
+            var table = new string[maxEndTime + 1, subdivisionNames.Count];
+
+            // Populate the table with JobId and OperationId
+            foreach (var job in jobs)
+            {
+                foreach (var operation in job.Operations)
+                {
+                    int columnIndex = subdivisionNames[operation.Subdivision];
+                    for (int time = operation.StartTime; time < operation.EndTime; time++)
+                    {
+                        table[time, columnIndex] = $"J{operation.JobId}O{operation.OperationId}";
+                    }
+                }
+            }
+
+            // Open a StreamWriter to write to the CSV file
+            using (var writer = new StreamWriter(filePath))
+            {
+                // Write the table header
+                writer.Write("Time,");
+                foreach (var subdivisionName in subdivisionNames.Keys)
+                {
+                    writer.Write($"{subdivisionName},");
+                }
+                writer.WriteLine();
+
+                // Write the table rows
+                for (int time = 0; time <= maxEndTime; time++)
+                {
+                    writer.Write($"{time},");
+                    for (int columnIndex = 0; columnIndex < subdivisionNames.Count; columnIndex++)
+                    {
+                        writer.Write($"{table[time, columnIndex] ?? string.Empty},");
+                    }
+                    writer.WriteLine();
+                }
+            }
         }
     }
 }

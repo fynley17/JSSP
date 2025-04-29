@@ -10,7 +10,7 @@ namespace Algorithms
     public class GA
     {
         private const int PopulationSize = 50;
-        private const int Generations = 50;
+        private const int Generations = 100;
         private const int TournamentSize = 5;
 
         private readonly List<Job> _jobs;
@@ -23,8 +23,6 @@ namespace Algorithms
 
         public Schedule Solve()
         {
-            Stopwatch stopwatch = Stopwatch.StartNew(); // Start the stopwatch
-
             List<Schedule> population = InitialisePopulation();
 
             Schedule best = population[0];
@@ -70,10 +68,6 @@ namespace Algorithms
 
                 population = newPopulation;
             }
-
-            stopwatch.Stop(); // Stop the stopwatch
-            Console.WriteLine($"Time taken to find the optimal solution: {stopwatch.ElapsedMilliseconds} ms"); // Output the elapsed time in milliseconds
-
             return best;
         }
 
