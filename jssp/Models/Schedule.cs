@@ -7,6 +7,7 @@ namespace jssp.Models
         public List<int> JobOrder { get; set; } = new();
 
         public int Fitness { get; set; } = int.MaxValue;
+        public List<Job> Jobs { get; set; }
 
         public Schedule Clone()
         {
