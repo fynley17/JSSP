@@ -52,7 +52,7 @@ namespace jssp
             var bestSchedule = ga.Solve();
 
             // Output the fitness of the best schedule
-            Console.WriteLine($"Fitness of the best schedule: {GA.Evaluate(bestSchedule, Jobs) - 1}");
+            Console.WriteLine($"Fitness of the best schedule: {GA.Evaluate(bestSchedule, Jobs)}");
 
             // Output the best schedule as a table
             string outputFilePath = Path.Combine(base_directory, "output.csv");
