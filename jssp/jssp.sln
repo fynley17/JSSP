@@ -6,6 +6,9 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jssp", "jssp.csproj", "{0A1D3ACB-217B-4AE4-9827-FC85955FE521}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "jssp.test", "..\jssp.test\jssp.test.csproj", "{EA6FDBA6-59BF-452B-8FDA-B8F7C99190CE}"
+	ProjectSection(ProjectDependencies) = postProject
+		{0A1D3ACB-217B-4AE4-9827-FC85955FE521} = {0A1D3ACB-217B-4AE4-9827-FC85955FE521}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

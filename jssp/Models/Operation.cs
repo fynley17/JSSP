@@ -1,4 +1,4 @@
-namespace Models
+namespace jssp.Models
 {
     public class Operation
     {

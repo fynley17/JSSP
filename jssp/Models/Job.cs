@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace Models
+namespace jssp.Models
 {
     public class Job
     {
