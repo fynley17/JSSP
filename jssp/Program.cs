@@ -20,20 +20,24 @@ namespace jssp
             var mainWindow = new Window("Job Scheduling Problem") { X = 0, Y = 0, Width = Dim.Fill(), Height = Dim.Fill() };
 
             // File selection list
-            var fileListView = new ListView() { X = 1, Y = 1, Width = Dim.Fill() - 2, Height = Dim.Fill() - 6 };
+            var fileListView = new ListView() { X = 1, Y = 1, Width = Dim.Fill() - 2, Height = Dim.Fill() - 20 };
             var files = GetCsvFiles();
             fileListView.SetSource(files);
+
 
             // Buttons
             var processButton = new Button("Process File") { X = 1, Y = Pos.Bottom(fileListView) + 1 };
             var exportButton = new Button("Export to CSV") { X = Pos.Right(processButton) + 2, Y = Pos.Top(processButton) };
             var openButton = new Button("Open CSV") { X = Pos.Right(exportButton) + 2, Y = Pos.Top(processButton) };
+            var exitButton = new Button("Exit") { X = Pos.Right(openButton) + 2, Y = Pos.Top(processButton) };
 
             // Status label
-            var statusLabel = new Label("Select a file and click 'Process File'") { X = 1, Y = Pos.Bottom(processButton) + 1, Width = Dim.Fill() };
+            var statusLabel = new Label("Select a file and click 'Process File'") { X = 1, Y = Pos.Bottom(processButton), Width = Dim.Fill() };
+
+
 
             // Add components to the main window
-            mainWindow.Add(fileListView, processButton, exportButton, openButton, statusLabel);
+            mainWindow.Add(statusLabel, fileListView, processButton, exportButton, openButton, exitButton);
             top.Add(mainWindow);
 
             string selectedFile = null;
@@ -58,11 +62,39 @@ namespace jssp
                     var jobProcessor = new JobProcessor();
                     jobs = jobProcessor.ProcessCsv(selectedFile);
 
+                    if (jobs.Count == 0)
+                    {
+                        statusLabel.Text = "No jobs found in the selected file.";
+                        return;
+                    }
+
                     var ga = new GA(jobs);
                     Stopwatch stopwatch = Stopwatch.StartNew(); // Start the stopwatch
                     bestSchedule = ga.Solve();
                     stopwatch.Stop(); // Stop the stopwatch
-                    statusLabel.Text = $"File processed in {stopwatch.ElapsedMilliseconds}ms.\nBest fitness: {GA.Evaluate(bestSchedule, jobs)}";
+
+                    // Calculate the average processing time per job
+                    double totalProcessingTime = jobs.Sum(job => job.Operations.Sum(op => op.ProcessingTime));
+                    double averageProcessingTime = totalProcessingTime / jobs.Count;
+
+                    // Calculate the number of operations per subdivision
+                    var operationsPerSubdivision = jobs
+                        .SelectMany(job => job.Operations)
+                        .GroupBy(op => op.Subdivision)
+                        .ToDictionary(group => group.Key, group => group.Count());
+
+                    // Format the operations per subdivision as a table
+                    string tableHeader = "Subdivision | Operations\n" +
+                                         "------------|-----------\n";
+                    string tableRows = string.Join("\n", operationsPerSubdivision.Select(kvp => $"{kvp.Key.PadRight(12)} | {kvp.Value}"));
+                    string operationsTable = tableHeader + tableRows;
+
+                    statusLabel.Text = $"File processed in {stopwatch.ElapsedMilliseconds}ms.\n" +
+                                       $"Best fitness: {GA.Evaluate(bestSchedule, jobs)}.\n" +
+                                       $"Total jobs completed: {jobs.Count}.\n" +
+                                       $"Average processing time per job: {averageProcessingTime:F2} hrs.\n\n" +
+                                       $"Operations per subdivision:\n{operationsTable}";
+                    Application.Refresh(); // Refresh the UI to show the updated status
                 }
                 catch (Exception ex)
                 {
@@ -107,6 +139,12 @@ namespace jssp
                 {
                     statusLabel.Text = $"Error opening file: {ex.Message}";
                 }
+            };
+
+            // Exit button click event
+            exitButton.Clicked += () =>
+            {
+                Application.RequestStop(); // Stops the application
             };
 
             Application.Run();
