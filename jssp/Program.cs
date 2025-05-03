@@ -5,6 +5,7 @@ using Terminal.Gui;
 using jssp.Models;
 using Algorithms;
 using System.Diagnostics;
+using ClosedXML.Excel;
 
 namespace jssp
 {
@@ -27,8 +28,8 @@ namespace jssp
 
             // Buttons
             var processButton = new Button("Process File") { X = 1, Y = Pos.Bottom(fileListView) + 1 };
-            var exportButton = new Button("Export to CSV") { X = Pos.Right(processButton) + 2, Y = Pos.Top(processButton) };
-            var openButton = new Button("Open CSV") { X = Pos.Right(exportButton) + 2, Y = Pos.Top(processButton) };
+            var exportExcelButton = new Button("Export to Excel") { X = Pos.Right(processButton) + 2, Y = Pos.Top(processButton) };
+            var openButton = new Button("Open Excel") { X = Pos.Right(exportExcelButton) + 2, Y = Pos.Top(processButton) };
             var exitButton = new Button("Exit") { X = Pos.Right(openButton) + 2, Y = Pos.Top(processButton) };
 
             // Status label
@@ -37,13 +38,13 @@ namespace jssp
 
 
             // Add components to the main window
-            mainWindow.Add(statusLabel, fileListView, processButton, exportButton, openButton, exitButton);
+            mainWindow.Add(statusLabel, fileListView, processButton, exportExcelButton, openButton, exitButton);
             top.Add(mainWindow);
 
             string selectedFile = null;
             List<Job> jobs = null;
             Schedule bestSchedule = null;
-            string outputFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "output.csv");
+            string outputExcelFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "output.xlsx");
 
             // Process file button click
             processButton.Clicked += () =>
@@ -102,8 +103,8 @@ namespace jssp
                 }
             };
 
-            // Export to CSV button click
-            exportButton.Clicked += () =>
+            // Export to Excel button click
+            exportExcelButton.Clicked += () =>
             {
                 if (bestSchedule == null || jobs == null)
                 {
@@ -113,8 +114,8 @@ namespace jssp
 
                 try
                 {
-                    SchedulePrinter.PrintScheduleAsCsv(jobs, bestSchedule, outputFilePath);
-                    statusLabel.Text = $"Schedule exported to {outputFilePath}";
+                    SchedulePrinter.PrintScheduleAsExcel(jobs, bestSchedule, outputExcelFilePath);
+                    statusLabel.Text = $"Schedule exported to {outputExcelFilePath}";
                 }
                 catch (Exception ex)
                 {
@@ -125,7 +126,7 @@ namespace jssp
             // Open CSV button click
             openButton.Clicked += () =>
             {
-                if (!File.Exists(outputFilePath))
+                if (!File.Exists(outputExcelFilePath))
                 {
                     statusLabel.Text = "No exported file found. Export a schedule first.";
                     return;
@@ -133,7 +134,13 @@ namespace jssp
 
                 try
                 {
-                    System.Diagnostics.Process.Start("explorer.exe", outputFilePath);
+                    // Explicitly open the file with Excel
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "excel.exe",
+                        Arguments = $"\"{outputExcelFilePath}\"",
+                        UseShellExecute = true
+                    });
                 }
                 catch (Exception ex)
                 {
@@ -291,6 +298,138 @@ namespace jssp
                     writer.WriteLine();
                 }
             }
+        }
+
+        public static void PrintScheduleAsExcel(List<Job> jobs, Schedule schedule, string filePath)
+        {
+            // Determine the maximum end time
+            int maxEndTime = 0;
+            foreach (var job in jobs)
+            {
+                foreach (var operation in job.Operations)
+                {
+                    if (operation.EndTime > maxEndTime)
+                    {
+                        maxEndTime = operation.EndTime;
+                    }
+                }
+            }
+
+            // Create a dictionary to map subdivision names to column indices
+            var subdivisionNames = new Dictionary<string, int>();
+            int nextColumnIndex = 1; // Start from column 1 (A)
+            foreach (var job in jobs)
+            {
+                foreach (var operation in job.Operations)
+                {
+                    if (!subdivisionNames.ContainsKey(operation.Subdivision))
+                    {
+                        subdivisionNames[operation.Subdivision] = nextColumnIndex++;
+                    }
+                }
+            }
+
+            // Generate pastel colors for each JobId
+            var jobColors = new Dictionary<int, XLColor>();
+            foreach (var job in jobs)
+            {
+                if (!jobColors.ContainsKey(job.JobId))
+                {
+                    jobColors[job.JobId] = GeneratePastelColor(job.JobId);
+                }
+            }
+
+            // Create a new Excel workbook
+            using (var workbook = new XLWorkbook())
+            {
+                var worksheet = workbook.Worksheets.Add("Schedule");
+
+                // Write the table header
+                worksheet.Cell(1, 1).Value = "Time";
+                int column = 2;
+                foreach (var subdivisionName in subdivisionNames.Keys)
+                {
+                    worksheet.Cell(1, column++).Value = subdivisionName;
+                }
+
+                // Apply header formatting
+                var headerRange = worksheet.Range(1, 1, 1, subdivisionNames.Count + 1);
+                headerRange.Style.Font.Bold = true;
+                headerRange.Style.Fill.BackgroundColor = XLColor.LightGray;
+
+                // Populate the table with JobId and OperationId
+                for (int time = 0; time <= maxEndTime; time++)
+                {
+                    worksheet.Cell(time + 2, 1).Value = time; // Time column
+                    foreach (var job in jobs)
+                    {
+                        foreach (var operation in job.Operations)
+                        {
+                            if (time >= operation.StartTime && time < operation.EndTime)
+                            {
+                                int columnIndex = subdivisionNames[operation.Subdivision] + 1;
+                                var cell = worksheet.Cell(time + 2, columnIndex);
+                                cell.Value = $"J{operation.JobId}O{operation.OperationId}";
+                                cell.Style.Fill.BackgroundColor = jobColors[job.JobId]; // Assign unique pastel color
+                            }
+                        }
+                    }
+                }
+
+                // Merge identical cells in each column
+                foreach (var subdivisionName in subdivisionNames.Keys)
+                {
+                    int columnIndex = subdivisionNames[subdivisionName] + 1;
+                    string previousValue = null;
+                    int mergeStartRow = 2;
+
+                    for (int row = 2; row <= maxEndTime + 2; row++)
+                    {
+                        var currentValue = worksheet.Cell(row, columnIndex).GetValue<string>();
+                        if (currentValue == previousValue)
+                        {
+                            continue;
+                        }
+
+                        if (previousValue != null && row - mergeStartRow > 1)
+                        {
+                            worksheet.Range(mergeStartRow, columnIndex, row - 1, columnIndex).Merge();
+                        }
+
+                        previousValue = currentValue;
+                        mergeStartRow = row;
+                    }
+
+                    // Merge the last group of cells
+                    if (previousValue != null && maxEndTime + 2 - mergeStartRow > 0)
+                    {
+                        worksheet.Range(mergeStartRow, columnIndex, maxEndTime + 2, columnIndex).Merge();
+                    }
+                }
+
+                // Add black borders around each cell
+                var usedRange = worksheet.RangeUsed();
+                usedRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                usedRange.Style.Border.OutsideBorderColor = XLColor.Black;
+                usedRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+                usedRange.Style.Border.InsideBorderColor = XLColor.Black;
+
+                // Adjust column widths
+                worksheet.Columns().AdjustToContents();
+
+                // Save the Excel file
+                workbook.SaveAs(filePath);
+            }
+        }
+
+        // Method to generate pastel colors
+        private static XLColor GeneratePastelColor(int seed)
+        {
+            Random random = new Random(seed);
+            byte r = (byte)((random.Next(128, 256) + 255) / 2); // Generate lighter red
+            byte g = (byte)((random.Next(128, 256) + 255) / 2); // Generate lighter green
+            byte b = (byte)((random.Next(128, 256) + 255) / 2); // Generate lighter blue
+            return XLColor.FromArgb(r, g, b);
         }
     }
 }

@@ -19,6 +19,7 @@
   </ItemGroup>
 
    <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.104.2" />
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
     <PackageReference Include="Terminal.Gui" Version="1.18.1" />
   </ItemGroup>
