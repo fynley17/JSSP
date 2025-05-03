@@ -122,4 +122,74 @@
             Assert.AreEqual(jobs.Count, bestSchedule.JobOrder.Distinct().Count(), "The number of unique job IDs in the job order should match the number of jobs.");
         }
     }
+
+    [TestClass]
+    public class GATest
+    {
+        [TestMethod]
+        public void TestScheduleInitialization()
+        {
+            // Arrange & Act
+            var schedule = new Schedule();
+
+            // Assert
+            Assert.IsNotNull(schedule.JobOrder);
+            Assert.AreEqual(0, schedule.JobOrder.Count);
+            Assert.AreEqual(int.MaxValue, schedule.Fitness);
+        }
+
+        [TestMethod]
+        public void TestScheduleClone()
+        {
+            // Arrange
+            var original = new Schedule
+            {
+                JobOrder = new List<int> { 1, 2, 3 },
+                Fitness = 100
+            };
+
+            // Act
+            var clone = original.Clone();
+
+            // Assert
+            Assert.AreNotSame(original, clone);
+            CollectionAssert.AreEqual(original.JobOrder, clone.JobOrder);
+            Assert.AreEqual(original.Fitness, clone.Fitness);
+
+            // Modify clone and ensure original is unaffected
+            clone.JobOrder[0] = 99;
+            clone.Fitness = 200;
+            Assert.AreNotEqual(original.JobOrder[0], clone.JobOrder[0]);
+            Assert.AreNotEqual(original.Fitness, clone.Fitness);
+        }
+
+        [TestMethod]
+        public void TestScheduleFitnessProperty()
+        {
+            // Arrange
+            var schedule = new Schedule();
+
+            // Act
+            schedule.Fitness = 500;
+
+            // Assert
+            Assert.AreEqual(500, schedule.Fitness);
+        }
+
+        [TestMethod]
+        public void TestScheduleJobOrderProperty()
+        {
+            // Arrange
+            var schedule = new Schedule();
+
+            // Act
+            schedule.JobOrder.Add(1);
+            schedule.JobOrder.Add(2);
+            schedule.JobOrder.Remove(1);
+
+            // Assert
+            Assert.AreEqual(1, schedule.JobOrder.Count);
+            Assert.AreEqual(2, schedule.JobOrder[0]);
+        }
+    }
 }
